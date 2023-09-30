@@ -6,11 +6,6 @@ interface FrameData {
 	dataURL: string;
 	size: number;
 
-	leftDataUrl: string;
-	rightDataUrl: string;
-	bottomDataUrl: string;
-	topDataUrl: string;
-
 	leftNeighbours: Set<FrameData>;
 	rightNeighbours: Set<FrameData>;
 	bottomNeighbours: Set<FrameData>;
@@ -20,4 +15,20 @@ interface FrameData {
 	rightNeighbour: FrameData | null;
 	bottomNeighbour: FrameData | null;
 	topNeighbour: FrameData | null;
+}
+
+interface SerializeFrameData {
+	frequency: number;
+	dataURL: string;
+	size: number;
+
+	leftNeighbours: string[];
+	rightNeighbours: string[];
+	bottomNeighbours: string[];
+	topNeighbours: string[];
+
+	leftNeighbour: string | null;
+	rightNeighbour: string | null;
+	bottomNeighbour: string | null;
+	topNeighbour: string | null;
 }
