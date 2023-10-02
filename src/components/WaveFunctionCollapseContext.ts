@@ -1,5 +1,6 @@
 import { createContext } from "react";
 
 export const WaveFunctionCollapseContext = createContext<{
+	image: HTMLImageElement;
 	frameDatas: FrameData[];
-}>({ frameDatas: [] });
+}>({ image: new Image(), frameDatas: [] });

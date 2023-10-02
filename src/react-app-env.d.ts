@@ -1,34 +1,42 @@
 /// <reference types="react-scripts" />
 
+type ID = number;
+
 interface FrameData {
-	canvas: HTMLCanvasElement;
+	id: ID;
+
+	// canvas: HTMLCanvasElement;
 	frequency: number;
-	dataURL: string;
+	// dataURL: string;
+
+	x: number;
+	y: number;
 	size: number;
 
 	leftNeighbours: Set<FrameData>;
 	rightNeighbours: Set<FrameData>;
 	bottomNeighbours: Set<FrameData>;
 	topNeighbours: Set<FrameData>;
-
-	leftNeighbour: FrameData | null;
-	rightNeighbour: FrameData | null;
-	bottomNeighbour: FrameData | null;
-	topNeighbour: FrameData | null;
 }
 
 interface SerializeFrameData {
+	id: ID;
+
 	frequency: number;
-	dataURL: string;
+	// dataURL: string;
+
+	x: number;
+	y: number;
 	size: number;
 
-	leftNeighbours: string[];
-	rightNeighbours: string[];
-	bottomNeighbours: string[];
-	topNeighbours: string[];
+	leftNeighbours: ID[];
+	rightNeighbours: ID[];
+	bottomNeighbours: ID[];
+	topNeighbours: ID[];
+}
 
-	leftNeighbour: string | null;
-	rightNeighbour: string | null;
-	bottomNeighbour: string | null;
-	topNeighbour: string | null;
+interface FrequencyStore {
+	dataUrls: Set<string>;
+	frameDatas: Set<FrameData>;
+	number: number;
 }

@@ -4,13 +4,15 @@ export const isImage = (x: any): x is HTMLImageElement =>
 export const isCanvas = (x: any): x is HTMLCanvasElement =>
 	x instanceof HTMLCanvasElement;
 
+const angles = [Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4];
+
 export const cutFrames = (
 	image: HTMLImageElement,
 	size: number,
 	rotate: boolean,
 	isPersist: boolean = false
 ): FrameData[] => {
-	const imageDataUrl = isPersist ? getDataUrl(image) : "";
+	const imageDataUrl = isPersist ? imageToDataUrl(image) : "";
 
 	if (isPersist) {
 		const json = localStorage.getItem(imageDataUrl);
@@ -20,158 +22,204 @@ export const cutFrames = (
 		}
 	}
 
-	const frameDatas = new Map<string, FrameData>();
-	const frequency = new Map<string, number>();
+	const frequency = new Map<string, FrequencyStore>();
 
 	// Нарезка
+	console.time("Нарезка");
 	for (let y = 0; y < Math.floor(image.height / size); y++) {
 		for (let x = 0; x < Math.floor(image.width / size); x++) {
-			const dataFrame = cutFrame(image, x * size, y * size, size);
+			const frameData: FrameData = {
+				id: -1,
+				frequency: 0,
+				x: x * size,
+				y: y * size,
+				size,
+				leftNeighbours: new Set<FrameData>(),
+				rightNeighbours: new Set<FrameData>(),
+				bottomNeighbours: new Set<FrameData>(),
+				topNeighbours: new Set<FrameData>(),
+			};
 
-			if (!frameDatas.has(dataFrame.dataURL)) {
-				frameDatas.set(dataFrame.dataURL, dataFrame);
+			const dataURL = imageToDataUrl(
+				image,
+				frameData.x,
+				frameData.y,
+				frameData.size,
+				frameData.size
+			);
+
+			if (frequency.has(dataURL)) {
+				const store = frequency.get(dataURL);
+
+				if (store) {
+					store.number++;
+				}
+
+				continue;
 			}
 
-			if (!frequency.has(dataFrame.dataURL)) {
-				frequency.set(dataFrame.dataURL, 0);
-			}
+			const store: FrequencyStore = {
+				dataUrls: new Set(),
+				frameDatas: new Set(),
+				number: 0,
+			};
 
-			// prettier-ignore
-			// @ts-ignore
-			frequency.set(dataFrame.dataURL, frequency.get(dataFrame.dataURL) + 1);
-		}
-	}
-	//  Устанавливает частоту появления фрейма
-	for (const dataURL of frameDatas.keys()) {
-		const number = frequency.get(dataURL) as number;
-		// @ts-ignore
-		frameDatas.get(dataURL).frequency = number;
-	}
-	// Получаем версии тех же фреймов, но развернутых на 90, 180 и 270 градусов
+			store.dataUrls.add(dataURL);
+			store.frameDatas.add(frameData);
+			store.number++;
 
-	if (rotate) {
-		const angles = [Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4];
+			if (rotate) {
+				for (const angle of angles) {
+					const rotatedFrameData = createRotatedFrameData(
+						image,
+						frameData,
+						angle
+					);
 
-		for (const frameData of frameDatas.values()) {
-			for (const angle of angles) {
-				const rotatedFrameData = createRotatedFrameData(
-					frameData,
-					angle
-				);
+					const rotatedDataURL = imageToDataUrl(
+						image,
+						rotatedFrameData.x,
+						rotatedFrameData.y,
+						rotatedFrameData.size,
+						rotatedFrameData.size
+					);
 
-				if (!frameDatas.has(rotatedFrameData.dataURL)) {
-					frameDatas.set(rotatedFrameData.dataURL, rotatedFrameData);
+					store.dataUrls.add(rotatedDataURL);
+					store.frameDatas.add(rotatedFrameData);
 				}
 			}
 		}
 	}
+	console.timeEnd("Нарезка");
+
+	//  Устанавливает частоту появления фрейма
+	console.time("Устанавливает частоту появления фрейма");
+	const frameDatas: FrameData[] = [];
+	for (const store of frequency.values()) {
+		const { number, frameDatas: fds } = store;
+
+		for (const frameData of fds) {
+			frameData.frequency = number;
+			frameDatas.push(frameData);
+		}
+	}
+	console.timeEnd("Устанавливает частоту появления фрейма");
+
+	// Получаем версии тех же фреймов, но развернутых на 90, 180 и 270 градусов
+	// console.time(
+	// 	"Получаем версии тех же фреймов, но развернутых на 90, 180 и 270 градусов"
+	// );
+	// if (rotate) {
+	// 	const angles = [Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4];
+
+	// 	for (const frameData of frameDatas.values()) {
+	// 		for (const angle of angles) {
+	// 			const rotatedFrameData = createRotatedFrameData(
+	// 				image,
+	// 				frameData,
+	// 				angle
+	// 			);
+
+	// 			const dataURL = imageToDataUrl(
+	// 				image,
+	// 				rotatedFrameData.x,
+	// 				rotatedFrameData.y,
+	// 				rotatedFrameData.size,
+	// 				rotatedFrameData.size
+	// 			);
+
+	// 			if (!frameDatas.has(dataURL)) {
+	// 				frameDatas.set(dataURL, rotatedFrameData);
+	// 			}
+	// 		}
+	// 	}
+	// }
+	// console.timeEnd(
+	// 	"Получаем версии тех же фреймов, но развернутых на 90, 180 и 270 градусов"
+	// );
+
 	// Нарезка краев
-	const finalFrameDates = Array.from(frameDatas.values());
+	console.time("Нарезка краев");
 
-	const leftDataUrls = new Map<string, string>();
-	const rightDataUrls = new Map<string, string>();
-	const bottomDataUrls = new Map<string, string>();
-	const topDataUrls = new Map<string, string>();
+	const leftDataUrls = new Map<FrameData, string>();
+	const rightDataUrls = new Map<FrameData, string>();
+	const bottomDataUrls = new Map<FrameData, string>();
+	const topDataUrls = new Map<FrameData, string>();
 
-	finalFrameDates.forEach((finalFrame) => {
+	frameDatas.forEach((finalFrame) => {
 		const [topDataUrl, rightDataUrl, bottomDataUrl, leftDataUrl] =
-			initSideDataUrls(finalFrame);
+			initSideDataUrls(image, finalFrame);
 
-		leftDataUrls.set(finalFrame.dataURL, leftDataUrl);
-		rightDataUrls.set(finalFrame.dataURL, rightDataUrl);
-		bottomDataUrls.set(finalFrame.dataURL, bottomDataUrl);
-		topDataUrls.set(finalFrame.dataURL, topDataUrl);
+		leftDataUrls.set(finalFrame, leftDataUrl);
+		rightDataUrls.set(finalFrame, rightDataUrl);
+		bottomDataUrls.set(finalFrame, bottomDataUrl);
+		topDataUrls.set(finalFrame, topDataUrl);
 	});
+	console.timeEnd("Нарезка краев");
 
 	// Ищем соседей
-	for (let i = 0; i < finalFrameDates.length; i++) {
-		const frameData1 = finalFrameDates[i];
+	console.time("Ищем соседей");
+	for (let i = 0; i < frameDatas.length; i++) {
+		const frameData1 = frameDatas[i];
 
-		for (let j = i; j < finalFrameDates.length; j++) {
-			const frameData2 = finalFrameDates[j];
+		for (let j = i; j < frameDatas.length; j++) {
+			const frameData2 = frameDatas[j];
 
 			if (
-				leftDataUrls.get(frameData1.dataURL) ===
-				rightDataUrls.get(frameData2.dataURL)
+				leftDataUrls.get(frameData1) === rightDataUrls.get(frameData2)
 			) {
 				frameData1.leftNeighbours.add(frameData2);
 				frameData2.rightNeighbours.add(frameData1);
 			}
 
 			if (
-				rightDataUrls.get(frameData1.dataURL) ===
-				leftDataUrls.get(frameData2.dataURL)
+				rightDataUrls.get(frameData1) === leftDataUrls.get(frameData2)
 			) {
 				frameData1.rightNeighbours.add(frameData2);
 				frameData2.leftNeighbours.add(frameData1);
 			}
 
 			if (
-				bottomDataUrls.get(frameData1.dataURL) ===
-				topDataUrls.get(frameData2.dataURL)
+				bottomDataUrls.get(frameData1) === topDataUrls.get(frameData2)
 			) {
 				frameData1.bottomNeighbours.add(frameData2);
 				frameData2.topNeighbours.add(frameData1);
 			}
 
 			if (
-				topDataUrls.get(frameData1.dataURL) ===
-				bottomDataUrls.get(frameData2.dataURL)
+				topDataUrls.get(frameData1) === bottomDataUrls.get(frameData2)
 			) {
 				frameData1.topNeighbours.add(frameData2);
 				frameData2.bottomNeighbours.add(frameData1);
 			}
 		}
 	}
+	console.timeEnd("Ищем соседей");
+
+	// Раздаем id
+	frameDatas.forEach((frameDate, index) => (frameDate.id = index + 1));
+
+	// Сериализация
+	console.time("Сериализация");
 	if (isPersist) {
-		localStorage.setItem(
-			imageDataUrl,
-			serializeFrameDatas(finalFrameDates)
-		);
+		localStorage.setItem(imageDataUrl, serializeFrameDatas(frameDatas));
 	}
+	console.timeEnd("Сериализация");
 
-	return finalFrameDates;
-};
-
-export const cutFrame = (
-	image: HTMLImageElement,
-	x: number,
-	y: number,
-	size: number
-): FrameData => {
-	const frameData: FrameData = {
-		canvas: document.createElement("canvas"),
-		frequency: 0,
-		dataURL: "",
-		size,
-
-		leftNeighbours: new Set<FrameData>(),
-		rightNeighbours: new Set<FrameData>(),
-		bottomNeighbours: new Set<FrameData>(),
-		topNeighbours: new Set<FrameData>(),
-
-		leftNeighbour: null,
-		rightNeighbour: null,
-		bottomNeighbour: null,
-		topNeighbour: null,
-	};
-
-	const { canvas } = frameData;
-	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
-
-	canvas.width = size;
-	canvas.height = size;
-
-	context.drawImage(image, x, y, size, size, 0, 0, size, size);
-	frameData.dataURL = canvas.toDataURL("image/png");
-
-	return frameData;
+	return frameDatas;
 };
 
 export const initSideDataUrls = (
+	image: HTMLImageElement,
 	frameData: FrameData
 ): [string, string, string, string] => {
-	const { canvas, size } = frameData;
+	// TODO: Отрсовка напрямую из image для каждого края
+	const { size, x, y } = frameData;
+	const canvas = document.createElement("canvas");
+	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
+	canvas.width = size;
+	canvas.height = size;
+	context.drawImage(image, x, y, size, size, 0, 0, size, size);
 
 	// TopDataUrl
 	const topDataCanvas = document.createElement("canvas");
@@ -213,10 +261,11 @@ export const initSideDataUrls = (
 };
 
 export const createRotatedFrameData = (
+	image: HTMLImageElement,
 	frameData: FrameData,
 	angle: number
 ): FrameData => {
-	const { size } = frameData;
+	const { x, y, size } = frameData;
 
 	const canvas = document.createElement("canvas");
 	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
@@ -224,7 +273,7 @@ export const createRotatedFrameData = (
 	canvas.width = size;
 	canvas.height = size;
 
-	context.drawImage(frameData.canvas, 0, 0, size, size, 0, 0, size, size);
+	context.drawImage(image, x, y, size, size, 0, 0, size, size);
 	context.translate(size / 2, size / 2);
 	context.rotate(angle);
 	context.translate(-size / 2, -size / 2);
@@ -255,65 +304,52 @@ export const loadImage = (src: string) =>
 		}
 	});
 
-export const getDataUrl = (
-	image: HTMLImageElement | HTMLCanvasElement
+export const imageToDataUrl = (
+	image: HTMLImageElement | HTMLCanvasElement,
+	x = 0,
+	y = 0,
+	width = image.width,
+	height = image.height
 ): string => {
 	const canvas = document.createElement("canvas");
 	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
-	canvas.width = image.width;
-	canvas.height = image.height;
-	context.drawImage(image, 0, 0);
+	canvas.width = width;
+	canvas.height = height;
+	context.drawImage(image, x, y, width, height, 0, 0, width, height);
 	return canvas.toDataURL("image/png");
 };
 
 export const serializeFrameDatas = (frameDatas: FrameData[]): string => {
-	const items: any[] = frameDatas.map(({ canvas, ...frameData }, index) => ({
-		...frameData,
-	}));
+	const items = frameDatas.map(({ ...frameData }) => {
+		const item: SerializeFrameData = {
+			...frameData,
+			leftNeighbours: [],
+			rightNeighbours: [],
+			bottomNeighbours: [],
+			topNeighbours: [],
+		};
 
-	for (const item of items) {
-		if (item.leftNeighbour) {
-			item.leftNeighbour = item.leftNeighbour.dataURL;
+		return item;
+	});
+
+	for (let i = 0; i < items.length; i++) {
+		const item = items[i];
+		const frameData = frameDatas[i];
+
+		for (const leftNeighbour of frameData.leftNeighbours) {
+			item.leftNeighbours.push(leftNeighbour.id);
 		}
 
-		if (item.rightNeighbour) {
-			item.rightNeighbour = item.rightNeighbour.dataURL;
+		for (const rightNeighbour of frameData.rightNeighbours) {
+			item.rightNeighbours.push(rightNeighbour.id);
 		}
 
-		if (item.bottomNeighbour) {
-			item.bottomNeighbour = item.bottomNeighbour.dataURL;
+		for (const bottomNeighbour of frameData.bottomNeighbours) {
+			item.bottomNeighbours.push(bottomNeighbour.id);
 		}
 
-		if (item.topNeighbour) {
-			item.topNeighbour = item.topNeighbour.dataURL;
-		}
-	}
-
-	for (const item of items) {
-		const leftNeighbours = new Set<FrameData>(item.leftNeighbours);
-		const rightNeighbours = new Set<FrameData>(item.rightNeighbours);
-		const bottomNeighbours = new Set<FrameData>(item.bottomNeighbours);
-		const topNeighbours = new Set<FrameData>(item.topNeighbours);
-
-		item.leftNeighbours = [];
-		item.rightNeighbours = [];
-		item.bottomNeighbours = [];
-		item.topNeighbours = [];
-
-		for (const leftNeighbour of leftNeighbours) {
-			item.leftNeighbours.push(leftNeighbour.dataURL);
-		}
-
-		for (const rightNeighbour of rightNeighbours) {
-			item.rightNeighbours.push(rightNeighbour.dataURL);
-		}
-
-		for (const bottomNeighbour of bottomNeighbours) {
-			item.bottomNeighbours.push(bottomNeighbour.dataURL);
-		}
-
-		for (const topNeighbour of topNeighbours) {
-			item.topNeighbours.push(topNeighbour.dataURL);
+		for (const topNeighbour of frameData.topNeighbours) {
+			item.topNeighbours.push(topNeighbour.id);
 		}
 	}
 
@@ -322,91 +358,55 @@ export const serializeFrameDatas = (frameDatas: FrameData[]): string => {
 
 const deserializeFrameDatas = (json: string): FrameData[] => {
 	const items = JSON.parse(json) as SerializeFrameData[];
-	const review = new Map<string, FrameData>();
+	const review = new Map<number, FrameData>();
 
 	const frameDatas = items.map((item) => {
 		const frameData: FrameData = {
-			canvas: document.createElement("canvas"),
+			id: item.id,
+			// canvas: document.createElement("canvas"),
 			frequency: item.frequency,
-			dataURL: item.dataURL,
+			// dataURL: item.dataURL,
+
+			x: item.x,
+			y: item.y,
 			size: item.size,
 
 			leftNeighbours: new Set(),
 			rightNeighbours: new Set(),
 			bottomNeighbours: new Set(),
 			topNeighbours: new Set(),
-
-			leftNeighbour: null,
-			rightNeighbour: null,
-			bottomNeighbour: null,
-			topNeighbour: null,
 		};
 
-		review.set(item.dataURL, frameData);
+		review.set(item.id, frameData);
 
 		return frameData;
 	});
 
-	for (const item of items) {
-		if (item.leftNeighbour) {
-			(review.get(item.dataURL) as FrameData).leftNeighbour = review.get(
-				item.leftNeighbour
-			) as FrameData;
-		}
+	for (let i = 0; i < items.length; i++) {
+		const item = items[i];
+		const frameData = frameDatas[i];
 
-		if (item.rightNeighbour) {
-			(review.get(item.dataURL) as FrameData).rightNeighbour = review.get(
-				item.rightNeighbour
-			) as FrameData;
-		}
-
-		if (item.bottomNeighbour) {
-			(review.get(item.dataURL) as FrameData).bottomNeighbour =
-				review.get(item.bottomNeighbour) as FrameData;
-		}
-
-		if (item.topNeighbour) {
-			(review.get(item.dataURL) as FrameData).topNeighbour = review.get(
-				item.topNeighbour
-			) as FrameData;
-		}
-	}
-
-	for (const item of items) {
 		for (const leftNeighbour of item.leftNeighbours) {
-			(review.get(item.dataURL) as FrameData).leftNeighbours.add(
+			frameData.leftNeighbours.add(
 				review.get(leftNeighbour) as FrameData
 			);
 		}
 
 		for (const rightNeighbour of item.rightNeighbours) {
-			(review.get(item.dataURL) as FrameData).rightNeighbours.add(
+			frameData.rightNeighbours.add(
 				review.get(rightNeighbour) as FrameData
 			);
 		}
 
 		for (const bottomNeighbour of item.bottomNeighbours) {
-			(review.get(item.dataURL) as FrameData).bottomNeighbours.add(
+			frameData.bottomNeighbours.add(
 				review.get(bottomNeighbour) as FrameData
 			);
 		}
 
 		for (const topNeighbour of item.topNeighbours) {
-			(review.get(item.dataURL) as FrameData).topNeighbours.add(
-				review.get(topNeighbour) as FrameData
-			);
+			frameData.topNeighbours.add(review.get(topNeighbour) as FrameData);
 		}
-	}
-
-	for (const frameData of frameDatas) {
-		const { canvas, dataURL } = frameData;
-		const context = canvas.getContext("2d") as CanvasRenderingContext2D;
-		const image = new Image();
-		image.src = dataURL;
-		canvas.width = image.width;
-		canvas.height = image.height;
-		// prettier-ignore
-		context.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
 	}
 
 	return frameDatas;

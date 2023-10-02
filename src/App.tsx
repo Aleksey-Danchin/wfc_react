@@ -9,7 +9,12 @@ const images = { schema: "./sets/schema.png" };
 export const App: FC = () => {
 	return (
 		<Preloader images={images}>
-			<WaveFunctionCollapse image="schema" size={14} rotate persist>
+			<WaveFunctionCollapse
+				image="schema"
+				size={14}
+				rotate
+				persist={false}
+			>
 				<Canvas fullscreenMode>
 					<Frame x={50} y={50} />
 				</Canvas>

@@ -27,7 +27,11 @@ export const WaveFunctionCollapse: FC<WaveFunctionCollapseProps> = ({
 			return;
 		}
 
+		console.time("frameDatas");
 		const frameDatas = cutFrames(image, size, rotate, persist);
+		console.timeEnd("frameDatas");
+		console.log(frameDatas);
+
 		setFrameDatas(frameDatas);
 	}, [image, rotate, size, persist]);
 
@@ -35,8 +39,12 @@ export const WaveFunctionCollapse: FC<WaveFunctionCollapseProps> = ({
 		return <h1>Image for wfc not found.</h1>;
 	}
 
+	if (!frameDatas) {
+		return <h1>Cutting . . .</h1>;
+	}
+
 	return (
-		<WaveFunctionCollapseContext.Provider value={{ frameDatas }}>
+		<WaveFunctionCollapseContext.Provider value={{ image, frameDatas }}>
 			{children}
 		</WaveFunctionCollapseContext.Provider>
 	);

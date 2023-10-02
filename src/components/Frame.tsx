@@ -7,19 +7,21 @@ export interface FrameProps {
 	y: number;
 }
 
-export const Frame: FC<FrameProps> = ({ x, y }) => {
-	const { frameDatas } = useContext(WaveFunctionCollapseContext);
-	const frame = frameDatas[0];
+export const Frame: FC<FrameProps> = ({ x: dx, y: dy }) => {
+	const { image, frameDatas } = useContext(WaveFunctionCollapseContext);
+	const frameData = frameDatas[35];
 
-	if (!frame) {
+	if (!frameData) {
 		return null;
 	}
+
+	const { x, y, size } = frameData;
 
 	return (
 		<Figura
 			render={(canvas, context) => {
 				context.beginPath();
-				context.drawImage(frame.canvas, x, y);
+				context.drawImage(image, x, y, size, size, dx, dy, size, size);
 			}}
 		/>
 	);
