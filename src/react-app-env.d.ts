@@ -12,6 +12,7 @@ interface FrameData {
 	x: number;
 	y: number;
 	size: number;
+	angle: 0 | 90 | 180 | 270;
 
 	leftNeighbours: Set<FrameData>;
 	rightNeighbours: Set<FrameData>;
@@ -28,6 +29,7 @@ interface SerializeFrameData {
 	x: number;
 	y: number;
 	size: number;
+	angle: 0 | 90 | 180 | 270;
 
 	leftNeighbours: ID[];
 	rightNeighbours: ID[];
@@ -36,7 +38,10 @@ interface SerializeFrameData {
 }
 
 interface FrequencyStore {
-	dataUrls: Set<string>;
 	frameDatas: Set<FrameData>;
 	number: number;
+}
+
+interface ChartData {
+	collapsed: number[];
 }

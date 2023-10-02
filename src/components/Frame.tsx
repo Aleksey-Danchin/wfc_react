@@ -1,27 +1,38 @@
 import { FC, useContext } from "react";
 import { WaveFunctionCollapseContext } from "./WaveFunctionCollapseContext";
 import { Figura } from "./Figura";
+import { imageToCanvas } from "./util";
 
 export interface FrameProps {
 	x: number;
 	y: number;
+	id: number;
 }
 
-export const Frame: FC<FrameProps> = ({ x: dx, y: dy }) => {
+export const Frame: FC<FrameProps> = ({ x: dx, y: dy, id }) => {
 	const { image, frameDatas } = useContext(WaveFunctionCollapseContext);
-	const frameData = frameDatas[35];
+	const frameData = frameDatas.find((frameData) => frameData.id === id);
 
 	if (!frameData) {
 		return null;
 	}
 
-	const { x, y, size } = frameData;
+	const { size } = frameData;
 
 	return (
 		<Figura
-			render={(canvas, context) => {
+			render={(_, context) => {
+				const canvas = imageToCanvas(
+					image,
+					frameData.x,
+					frameData.y,
+					frameData.size,
+					frameData.size,
+					frameData.angle
+				);
+
 				context.beginPath();
-				context.drawImage(image, x, y, size, size, dx, dy, size, size);
+				context.drawImage(canvas, dx, dy);
 			}}
 		/>
 	);

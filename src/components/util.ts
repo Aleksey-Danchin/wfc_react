@@ -4,7 +4,7 @@ export const isImage = (x: any): x is HTMLImageElement =>
 export const isCanvas = (x: any): x is HTMLCanvasElement =>
 	x instanceof HTMLCanvasElement;
 
-const angles = [Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4];
+const angles = [90, 180, 270] as const;
 
 export const cutFrames = (
 	image: HTMLImageElement,
@@ -34,6 +34,7 @@ export const cutFrames = (
 				x: x * size,
 				y: y * size,
 				size,
+				angle: 0,
 				leftNeighbours: new Set<FrameData>(),
 				rightNeighbours: new Set<FrameData>(),
 				bottomNeighbours: new Set<FrameData>(),
@@ -59,33 +60,42 @@ export const cutFrames = (
 			}
 
 			const store: FrequencyStore = {
-				dataUrls: new Set(),
 				frameDatas: new Set(),
 				number: 0,
 			};
 
-			store.dataUrls.add(dataURL);
+			frequency.set(dataURL, store);
 			store.frameDatas.add(frameData);
 			store.number++;
 
 			if (rotate) {
 				for (const angle of angles) {
-					const rotatedFrameData = createRotatedFrameData(
-						image,
-						frameData,
-						angle
-					);
+					const rotatedFrameData: FrameData = {
+						id: -1,
+						frequency: 0,
+						x: x * size,
+						y: y * size,
+						size,
+						angle,
+						leftNeighbours: new Set<FrameData>(),
+						rightNeighbours: new Set<FrameData>(),
+						bottomNeighbours: new Set<FrameData>(),
+						topNeighbours: new Set<FrameData>(),
+					};
 
 					const rotatedDataURL = imageToDataUrl(
 						image,
 						rotatedFrameData.x,
 						rotatedFrameData.y,
 						rotatedFrameData.size,
-						rotatedFrameData.size
+						rotatedFrameData.size,
+						rotatedFrameData.angle
 					);
 
-					store.dataUrls.add(rotatedDataURL);
-					store.frameDatas.add(rotatedFrameData);
+					if (!frequency.has(rotatedDataURL)) {
+						store.frameDatas.add(rotatedFrameData);
+						frequency.set(rotatedDataURL, store);
+					}
 				}
 			}
 		}
@@ -94,50 +104,20 @@ export const cutFrames = (
 
 	//  Устанавливает частоту появления фрейма
 	console.time("Устанавливает частоту появления фрейма");
-	const frameDatas: FrameData[] = [];
+	const frameDatasCollection = new Set<FrameData>();
 	for (const store of frequency.values()) {
 		const { number, frameDatas: fds } = store;
 
 		for (const frameData of fds) {
 			frameData.frequency = number;
-			frameDatas.push(frameData);
+			frameDatasCollection.add(frameData);
 		}
 	}
+	const frameDatas: FrameData[] = Array.from(frameDatasCollection).sort(
+		(a, b) => a.id - b.id
+	);
+
 	console.timeEnd("Устанавливает частоту появления фрейма");
-
-	// Получаем версии тех же фреймов, но развернутых на 90, 180 и 270 градусов
-	// console.time(
-	// 	"Получаем версии тех же фреймов, но развернутых на 90, 180 и 270 градусов"
-	// );
-	// if (rotate) {
-	// 	const angles = [Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4];
-
-	// 	for (const frameData of frameDatas.values()) {
-	// 		for (const angle of angles) {
-	// 			const rotatedFrameData = createRotatedFrameData(
-	// 				image,
-	// 				frameData,
-	// 				angle
-	// 			);
-
-	// 			const dataURL = imageToDataUrl(
-	// 				image,
-	// 				rotatedFrameData.x,
-	// 				rotatedFrameData.y,
-	// 				rotatedFrameData.size,
-	// 				rotatedFrameData.size
-	// 			);
-
-	// 			if (!frameDatas.has(dataURL)) {
-	// 				frameDatas.set(dataURL, rotatedFrameData);
-	// 			}
-	// 		}
-	// 	}
-	// }
-	// console.timeEnd(
-	// 	"Получаем версии тех же фреймов, но развернутых на 90, 180 и 270 градусов"
-	// );
-
 	// Нарезка краев
 	console.time("Нарезка краев");
 
@@ -260,39 +240,6 @@ export const initSideDataUrls = (
 	return [topDataUrl, rightDataUrl, bottomDataUrl, leftDataUrl];
 };
 
-export const createRotatedFrameData = (
-	image: HTMLImageElement,
-	frameData: FrameData,
-	angle: number
-): FrameData => {
-	const { x, y, size } = frameData;
-
-	const canvas = document.createElement("canvas");
-	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
-
-	canvas.width = size;
-	canvas.height = size;
-
-	context.drawImage(image, x, y, size, size, 0, 0, size, size);
-	context.translate(size / 2, size / 2);
-	context.rotate(angle);
-	context.translate(-size / 2, -size / 2);
-
-	const rotatedFrameData = {
-		...frameData,
-
-		canvas,
-		dataURL: canvas.toDataURL("image/png"),
-
-		leftNeighbours: new Set<FrameData>(),
-		rightNeighbours: new Set<FrameData>(),
-		bottomNeighbours: new Set<FrameData>(),
-		topNeighbours: new Set<FrameData>(),
-	};
-
-	return rotatedFrameData;
-};
-
 export const loadImage = (src: string) =>
 	new Promise<HTMLImageElement>((resolve, reject) => {
 		try {
@@ -304,20 +251,38 @@ export const loadImage = (src: string) =>
 		}
 	});
 
+export const imageToCanvas = (
+	image: HTMLImageElement | HTMLCanvasElement,
+	x = 0,
+	y = 0,
+	width = image.width,
+	height = image.height,
+	angle = 0
+) => {
+	const canvas = document.createElement("canvas");
+	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
+
+	canvas.width = width;
+	canvas.height = height;
+	context.drawImage(image, x, y, width, height, 0, 0, width, height);
+
+	if (angle) {
+		context.translate(width / 2, height / 2);
+		context.rotate((angle * Math.PI) / 180);
+		context.translate(-width / 2, -height / 2);
+	}
+
+	return canvas;
+};
+
 export const imageToDataUrl = (
 	image: HTMLImageElement | HTMLCanvasElement,
 	x = 0,
 	y = 0,
 	width = image.width,
-	height = image.height
-): string => {
-	const canvas = document.createElement("canvas");
-	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
-	canvas.width = width;
-	canvas.height = height;
-	context.drawImage(image, x, y, width, height, 0, 0, width, height);
-	return canvas.toDataURL("image/png");
-};
+	height = image.height,
+	angle = 0
+) => imageToCanvas(image, x, y, width, height, angle).toDataURL("image/png");
 
 export const serializeFrameDatas = (frameDatas: FrameData[]): string => {
 	const items = frameDatas.map(({ ...frameData }) => {
@@ -363,9 +328,8 @@ const deserializeFrameDatas = (json: string): FrameData[] => {
 	const frameDatas = items.map((item) => {
 		const frameData: FrameData = {
 			id: item.id,
-			// canvas: document.createElement("canvas"),
 			frequency: item.frequency,
-			// dataURL: item.dataURL,
+			angle: item.angle,
 
 			x: item.x,
 			y: item.y,
