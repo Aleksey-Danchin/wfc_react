@@ -1,11 +1,12 @@
 import { FC, ReactNode, useContext, useEffect, useState } from "react";
 import { WaveFunctionCollapseContext } from "./WaveFunctionCollapseContext";
 import { PreloaderContext } from "./PreloaderContext";
-import { cutFrames } from "./util";
+import { cutFrames } from "../lib/util";
 
 export interface WaveFunctionCollapseProps {
 	image: string;
 	size: number;
+	offset?: number;
 	rotate?: boolean;
 	persist?: boolean;
 	children?: ReactNode | ReactNode[];
@@ -14,6 +15,7 @@ export interface WaveFunctionCollapseProps {
 export const WaveFunctionCollapse: FC<WaveFunctionCollapseProps> = ({
 	image: name,
 	size,
+	offset = size,
 	rotate = false,
 	persist = false,
 	children,
@@ -23,17 +25,19 @@ export const WaveFunctionCollapse: FC<WaveFunctionCollapseProps> = ({
 	const image = images[name];
 
 	useEffect(() => {
-		if (!image || !size) {
-			return;
-		}
+		(async () => {
+			if (!image || !size) {
+				return;
+			}
 
-		console.time("frameDatas");
-		const frameDatas = cutFrames(image, size, rotate, persist);
-		console.timeEnd("frameDatas");
-		console.log(frameDatas);
+			console.time("frameDatas");
+			const frameDatas = await cutFrames(image, size, offset, rotate);
+			console.timeEnd("frameDatas");
+			console.log(frameDatas);
 
-		setFrameDatas(frameDatas);
-	}, [image, rotate, size, persist]);
+			setFrameDatas(frameDatas);
+		})();
+	}, [image, rotate, size, persist, offset]);
 
 	if (!image) {
 		return <h1>Image for wfc not found.</h1>;
@@ -44,7 +48,9 @@ export const WaveFunctionCollapse: FC<WaveFunctionCollapseProps> = ({
 	}
 
 	return (
-		<WaveFunctionCollapseContext.Provider value={{ image, frameDatas }}>
+		<WaveFunctionCollapseContext.Provider
+			value={{ image, size, frameDatas }}
+		>
 			{children}
 		</WaveFunctionCollapseContext.Provider>
 	);

@@ -1,6 +1,6 @@
 import { FC, ReactNode, useEffect, useRef, useState } from "react";
 import { PreloaderContext } from "./PreloaderContext";
-import { loadImage } from "./util";
+import { loadImage } from "../lib/util";
 
 export interface PreloaderProps {
 	images: Record<string, string>;

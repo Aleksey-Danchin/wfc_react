@@ -1,7 +1,7 @@
 import { FC, useContext } from "react";
 import { PreloaderContext } from "./PreloaderContext";
 import { Figura } from "./Figura";
-import { isImage } from "./util";
+import { isImage } from "../lib/util";
 
 export interface PictureProps {
 	image: string | HTMLImageElement;

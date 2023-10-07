@@ -1,3 +1,5 @@
+import { getIntersection } from "./chart";
+
 export const isImage = (x: any): x is HTMLImageElement =>
 	x instanceof HTMLImageElement;
 
@@ -6,34 +8,35 @@ export const isCanvas = (x: any): x is HTMLCanvasElement =>
 
 const angles = [90, 180, 270] as const;
 
-export const cutFrames = (
+export const dxy = [
+	["leftNeighbours", -1, 0],
+	["rightNeighbours", 1, 0],
+	["bottomNeighbours", 0, 1],
+	["topNeighbours", 0, -1],
+] as const;
+
+export const cutFrames = async (
 	image: HTMLImageElement,
 	size: number,
-	rotate: boolean,
-	isPersist: boolean = false
-): FrameData[] => {
-	const imageDataUrl = isPersist ? imageToDataUrl(image) : "";
-
-	if (isPersist) {
-		const json = localStorage.getItem(imageDataUrl);
-
-		if (json) {
-			return deserializeFrameDatas(json);
-		}
-	}
-
+	offset: number,
+	rotate: boolean
+): Promise<FrameData[]> => {
 	const frequency = new Map<string, FrequencyStore>();
 
 	// Нарезка
 	console.time("Нарезка");
-	for (let y = 0; y < Math.floor(image.height / size); y++) {
-		for (let x = 0; x < Math.floor(image.width / size); x++) {
+
+	let y = 0;
+	while (y + size <= image.height) {
+		let x = 0;
+
+		while (x + size <= image.width) {
 			const frameData: FrameData = {
 				id: -1,
 				frequency: 0,
-				x: x * size,
-				y: y * size,
-				size,
+				x,
+				y,
+				// size,
 				angle: 0,
 				leftNeighbours: new Set<FrameData>(),
 				rightNeighbours: new Set<FrameData>(),
@@ -45,9 +48,11 @@ export const cutFrames = (
 				image,
 				frameData.x,
 				frameData.y,
-				frameData.size,
-				frameData.size
+				size,
+				size
 			);
+
+			await delay();
 
 			if (frequency.has(dataURL)) {
 				const store = frequency.get(dataURL);
@@ -55,50 +60,54 @@ export const cutFrames = (
 				if (store) {
 					store.number++;
 				}
+			} else {
+				const store: FrequencyStore = {
+					frameDatas: new Set(),
+					number: 0,
+				};
 
-				continue;
-			}
+				frequency.set(dataURL, store);
+				store.frameDatas.add(frameData);
+				store.number++;
 
-			const store: FrequencyStore = {
-				frameDatas: new Set(),
-				number: 0,
-			};
+				if (rotate) {
+					for (const angle of angles) {
+						const rotatedFrameData: FrameData = {
+							id: -1,
+							frequency: 0,
+							x,
+							y,
+							// size,
+							angle,
+							leftNeighbours: new Set<FrameData>(),
+							rightNeighbours: new Set<FrameData>(),
+							bottomNeighbours: new Set<FrameData>(),
+							topNeighbours: new Set<FrameData>(),
+						};
 
-			frequency.set(dataURL, store);
-			store.frameDatas.add(frameData);
-			store.number++;
+						const rotatedDataURL = imageToDataUrl(
+							image,
+							rotatedFrameData.x,
+							rotatedFrameData.y,
+							size,
+							size,
+							rotatedFrameData.angle
+						);
 
-			if (rotate) {
-				for (const angle of angles) {
-					const rotatedFrameData: FrameData = {
-						id: -1,
-						frequency: 0,
-						x: x * size,
-						y: y * size,
-						size,
-						angle,
-						leftNeighbours: new Set<FrameData>(),
-						rightNeighbours: new Set<FrameData>(),
-						bottomNeighbours: new Set<FrameData>(),
-						topNeighbours: new Set<FrameData>(),
-					};
+						await delay();
 
-					const rotatedDataURL = imageToDataUrl(
-						image,
-						rotatedFrameData.x,
-						rotatedFrameData.y,
-						rotatedFrameData.size,
-						rotatedFrameData.size,
-						rotatedFrameData.angle
-					);
-
-					if (!frequency.has(rotatedDataURL)) {
-						store.frameDatas.add(rotatedFrameData);
-						frequency.set(rotatedDataURL, store);
+						if (!frequency.has(rotatedDataURL)) {
+							store.frameDatas.add(rotatedFrameData);
+							frequency.set(rotatedDataURL, store);
+						}
 					}
 				}
 			}
+
+			x += offset;
 		}
+
+		y += offset;
 	}
 	console.timeEnd("Нарезка");
 
@@ -116,7 +125,7 @@ export const cutFrames = (
 	const frameDatas: FrameData[] = Array.from(frameDatasCollection).sort(
 		(a, b) => a.id - b.id
 	);
-
+	await delay();
 	console.timeEnd("Устанавливает частоту появления фрейма");
 	// Нарезка краев
 	console.time("Нарезка краев");
@@ -126,15 +135,17 @@ export const cutFrames = (
 	const bottomDataUrls = new Map<FrameData, string>();
 	const topDataUrls = new Map<FrameData, string>();
 
-	frameDatas.forEach((finalFrame) => {
+	for (const finalFrame of frameDatas) {
 		const [topDataUrl, rightDataUrl, bottomDataUrl, leftDataUrl] =
-			initSideDataUrls(image, finalFrame);
+			initSideDataUrls(image, size, finalFrame);
 
 		leftDataUrls.set(finalFrame, leftDataUrl);
 		rightDataUrls.set(finalFrame, rightDataUrl);
 		bottomDataUrls.set(finalFrame, bottomDataUrl);
 		topDataUrls.set(finalFrame, topDataUrl);
-	});
+
+		await delay();
+	}
 	console.timeEnd("Нарезка краев");
 
 	// Ищем соседей
@@ -179,22 +190,16 @@ export const cutFrames = (
 	// Раздаем id
 	frameDatas.forEach((frameDate, index) => (frameDate.id = index + 1));
 
-	// Сериализация
-	console.time("Сериализация");
-	if (isPersist) {
-		localStorage.setItem(imageDataUrl, serializeFrameDatas(frameDatas));
-	}
-	console.timeEnd("Сериализация");
-
 	return frameDatas;
 };
 
 export const initSideDataUrls = (
 	image: HTMLImageElement,
+	size: number,
 	frameData: FrameData
 ): [string, string, string, string] => {
 	// TODO: Отрсовка напрямую из image для каждого края
-	const { size, x, y } = frameData;
+	const { x, y } = frameData;
 	const canvas = document.createElement("canvas");
 	const context = canvas.getContext("2d") as CanvasRenderingContext2D;
 	canvas.width = size;
@@ -321,7 +326,7 @@ export const serializeFrameDatas = (frameDatas: FrameData[]): string => {
 	return JSON.stringify(items);
 };
 
-const deserializeFrameDatas = (json: string): FrameData[] => {
+export const deserializeFrameDatas = (json: string): FrameData[] => {
 	const items = JSON.parse(json) as SerializeFrameData[];
 	const review = new Map<number, FrameData>();
 
@@ -333,7 +338,7 @@ const deserializeFrameDatas = (json: string): FrameData[] => {
 
 			x: item.x,
 			y: item.y,
-			size: item.size,
+			// size: item.size,
 
 			leftNeighbours: new Set(),
 			rightNeighbours: new Set(),
@@ -374,4 +379,140 @@ const deserializeFrameDatas = (json: string): FrameData[] => {
 	}
 
 	return frameDatas;
+};
+
+export const delay = (timeout: number = 0) =>
+	new Promise((resolve) => setTimeout(resolve, timeout));
+
+export const serializeTopology = (topology: Topology<ID>): string => {
+	const array: number[] = [];
+
+	for (const y of topology.keys()) {
+		const row = topology.get(y);
+
+		if (!row) {
+			continue;
+		}
+
+		for (const x of row.keys()) {
+			const id = row.get(x);
+
+			if (id === undefined) {
+				continue;
+			}
+
+			array.push(x, y, id);
+		}
+	}
+
+	return JSON.stringify(array);
+};
+
+export const deserializeTopology = (json: string | number[]): Topology<ID> => {
+	const array = typeof json === "string" ? JSON.parse(json) : json;
+	const topology: Topology<ID> = new Map();
+
+	for (let i = 0; i < array.length; i += 3) {
+		const x = array[i];
+		const y = array[i + 1];
+		const id = array[i + 2];
+
+		if (!topology.has(y)) {
+			topology.set(y, new Map());
+		}
+
+		topology.get(y)?.set(x, id);
+	}
+
+	return topology;
+};
+
+export const createPotential = (
+	topology: Topology<ID>,
+	frameDatasCollection: FrameDatasCollection
+): Potential => {
+	const preparation: Topology<Set<FrameData>[]> = new Map();
+
+	for (const cy of topology.keys()) {
+		const row = topology.get(cy);
+
+		if (!row) {
+			continue;
+		}
+
+		for (const cx of row.keys()) {
+			const id = row.get(cx);
+
+			if (!id) {
+				continue;
+			}
+
+			for (const [side, dx, dy] of dxy) {
+				const x = cx + dx;
+				const y = cy + dy;
+
+				const neighbourId = topology.get(y)?.get(x);
+
+				if (!neighbourId) {
+					continue;
+				}
+
+				if (!preparation.has(y)) {
+					preparation.set(y, new Map());
+				}
+
+				const row = preparation.get(y);
+				if (!row) {
+					continue;
+				}
+
+				if (!row.has(x)) {
+					row.set(x, []);
+				}
+
+				const collection = row.get(x);
+				if (!collection) {
+					continue;
+				}
+
+				const neighbours = frameDatasCollection.get(id)?.[side];
+				if (neighbours) {
+					collection.push(neighbours);
+				}
+			}
+		}
+	}
+
+	const potential: Potential = new Map();
+
+	for (const cy of preparation.keys()) {
+		const row = preparation.get(cy);
+
+		if (!row) {
+			continue;
+		}
+
+		for (const cx of row.keys()) {
+			const collections = row.get(cx);
+
+			if (!collections) {
+				continue;
+			}
+
+			const variants = getIntersection(collections);
+
+			potential.set(cy, new Map());
+			potential.get(cy)?.set(cx, variants);
+		}
+	}
+
+	return potential;
+};
+
+export const collapseStep = (
+	topology: Topology<ID>,
+	frameDatasCollection: FrameDatasCollection,
+	potential: Potential
+): [Topology<ID>, Potential] => {
+	return [topology, potential]
 };

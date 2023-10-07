@@ -11,7 +11,7 @@ interface FrameData {
 
 	x: number;
 	y: number;
-	size: number;
+	// size: number;
 	angle: 0 | 90 | 180 | 270;
 
 	leftNeighbours: Set<FrameData>;
@@ -19,6 +19,8 @@ interface FrameData {
 	bottomNeighbours: Set<FrameData>;
 	topNeighbours: Set<FrameData>;
 }
+
+type FrameDatasCollection = Map<ID, FrameData>;
 
 interface SerializeFrameData {
 	id: ID;
@@ -28,7 +30,7 @@ interface SerializeFrameData {
 
 	x: number;
 	y: number;
-	size: number;
+	// size: number;
 	angle: 0 | 90 | 180 | 270;
 
 	leftNeighbours: ID[];
@@ -45,3 +47,6 @@ interface FrequencyStore {
 interface ChartData {
 	collapsed: number[];
 }
+
+type Topology<T> = Map<number, Map<number, T>>;
+type Potential = Topology<Set<FrameData>>;

@@ -1,7 +1,7 @@
 import { FC, useContext } from "react";
 import { WaveFunctionCollapseContext } from "./WaveFunctionCollapseContext";
 import { Figura } from "./Figura";
-import { imageToCanvas } from "./util";
+import { imageToCanvas } from "../lib/util";
 
 export interface FrameProps {
 	x: number;
@@ -10,14 +10,12 @@ export interface FrameProps {
 }
 
 export const Frame: FC<FrameProps> = ({ x: dx, y: dy, id }) => {
-	const { image, frameDatas } = useContext(WaveFunctionCollapseContext);
+	const { image, size, frameDatas } = useContext(WaveFunctionCollapseContext);
 	const frameData = frameDatas.find((frameData) => frameData.id === id);
 
 	if (!frameData) {
 		return null;
 	}
-
-	const { size } = frameData;
 
 	return (
 		<Figura
@@ -26,8 +24,8 @@ export const Frame: FC<FrameProps> = ({ x: dx, y: dy, id }) => {
 					image,
 					frameData.x,
 					frameData.y,
-					frameData.size,
-					frameData.size,
+					size,
+					size,
 					frameData.angle
 				);
 

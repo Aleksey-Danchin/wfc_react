@@ -1,4 +1,4 @@
-import { FC, ReactNode, useEffect, useRef } from "react";
+import { FC, ReactNode, useEffect, useRef, useState } from "react";
 import { CanvasContext } from "./CanvasContext";
 
 export interface CanvasProps {
@@ -9,12 +9,14 @@ export interface CanvasProps {
 }
 
 export const Canvas: FC<CanvasProps> = ({
-	width = 300,
-	height = 300,
+	width: initWidth = 300,
+	height: initHeight = 300,
 	fullscreenMode = false,
 	children,
 }) => {
 	const ref = useRef<HTMLCanvasElement>(null);
+	const [width, setWidth] = useState(initWidth);
+	const [height, setHeight] = useState(initHeight);
 
 	useEffect(() => {
 		const canvas = ref.current;
@@ -26,6 +28,9 @@ export const Canvas: FC<CanvasProps> = ({
 		const resizeHandler: () => any = () => {
 			canvas.width = document.body.clientWidth;
 			canvas.height = document.body.clientHeight;
+
+			setWidth(canvas.width);
+			setHeight(canvas.height);
 		};
 
 		resizeHandler();
