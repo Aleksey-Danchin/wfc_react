@@ -22,7 +22,6 @@ export const Line: FC<LineProps> = ({
 	return (
 		<Figura
 			render={(canvas, context) => {
-				console.log("line fired");
 				context.beginPath();
 				context.moveTo(x1, y1);
 				context.strokeStyle = color;

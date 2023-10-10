@@ -453,7 +453,7 @@ export const createPotential = (
 
 				const neighbourId = topology.get(y)?.get(x);
 
-				if (!neighbourId) {
+				if (neighbourId) {
 					continue;
 				}
 
@@ -476,33 +476,43 @@ export const createPotential = (
 				}
 
 				const neighbours = frameDatasCollection.get(id)?.[side];
-				if (neighbours) {
-					collection.push(neighbours);
+
+				if (!neighbours) {
+					continue;
 				}
+
+				collection.push(neighbours);
 			}
 		}
 	}
 
 	const potential: Potential = new Map();
 
-	for (const cy of preparation.keys()) {
-		const row = preparation.get(cy);
+	for (const y of preparation.keys()) {
+		const row = preparation.get(y);
 
 		if (!row) {
 			continue;
 		}
 
-		for (const cx of row.keys()) {
-			const collections = row.get(cx);
+		for (const x of row.keys()) {
+			const collections = row.get(x);
 
 			if (!collections) {
 				continue;
 			}
 
-			const variants = getIntersection(collections);
+			if (!potential.has(y)) {
+				potential.set(y, new Map());
+			}
 
-			potential.set(cy, new Map());
-			potential.get(cy)?.set(cx, variants);
+			const frameDatas = potential.get(y);
+			if (!frameDatas) {
+				continue;
+			}
+
+			const variants = getIntersection(collections);
+			frameDatas.set(x, variants);
 		}
 	}
 
@@ -512,7 +522,135 @@ export const createPotential = (
 export const collapseStep = (
 	topology: Topology<ID>,
 	frameDatasCollection: FrameDatasCollection,
+	frameDatas: FrameData[],
 	potential: Potential
 ): [Topology<ID>, Potential] => {
-	return [topology, potential]
+	if (!frameDatas.length) {
+		throw Error("frameDatas empty");
+	}
+
+	if (topology.size === 0) {
+		topology.set(0, new Map());
+		topology.get(0)?.set(0, getRandomFrom(frameDatas).id);
+
+		return [
+			new Map(topology),
+			createPotential(topology, frameDatasCollection),
+		];
+	}
+
+	if (!potential.size) {
+		potential = createPotential(topology, frameDatasCollection);
+
+		if (!potential.size) {
+			throw Error("Potential is empty");
+		}
+	}
+
+	const controller = new Map<number, [number, number][]>();
+	for (const y of potential.keys()) {
+		const row = potential.get(y);
+
+		if (!row) {
+			continue;
+		}
+
+		for (const x of row.keys()) {
+			const variants = row.get(x);
+
+			if (!variants) {
+				continue;
+			}
+
+			const size = variants.size;
+			if (!controller.has(size)) {
+				controller.set(size, []);
+			}
+
+			controller.get(size)?.push([x, y]);
+		}
+	}
+
+	const numbers = Array.from(controller.keys())
+		.filter((n) => n !== 0)
+		.sort((a, b) => a - b);
+
+	for (const number of numbers) {
+		const coordinats = controller.get(number);
+
+		if (!coordinats) {
+			continue;
+		}
+
+		const [x, y] = getRandomFrom(coordinats);
+		const variants = potential.get(y)?.get(x);
+
+		if (!variants) {
+			continue;
+		}
+
+		if (topology.get(y)?.get(x)) {
+			throw Error("Cell already collapsed.");
+		}
+
+		// const frameData = getRandomFrom(variants);
+		const frameData = getRandomFromWithWeight(
+			variants,
+			Array.from(variants.values()).map((variant) => variant.frequency)
+		);
+
+		// TODO: обновить ссылку на новый второй уровень топологии
+
+		let row = topology.get(y);
+
+		if (!row) {
+			row = new Map<number, number>();
+			topology.set(y, row);
+		}
+
+		row.set(x, frameData.id);
+		topology.set(y, row);
+		break;
+	}
+
+	const nextTopology = new Map(topology);
+	const nextPotential = createPotential(nextTopology, frameDatasCollection);
+
+	return [nextTopology, nextPotential];
+};
+
+export const getRandomFrom = <T>(items: Array<T> | Set<T>) => {
+	const array = Array.from(items);
+
+	if (!array.length) {
+		throw Error("Empty array");
+	}
+
+	const index = Math.floor(Math.random() * array.length);
+	return array[index];
+};
+
+export const getRandomFromWithWeight = <T>(
+	items: Array<T> | Set<T>,
+	weight: number[]
+): T => {
+	const array = Array.from(items);
+
+	if (!array.length) {
+		throw Error("Empty array");
+	}
+
+	const totalSum = weight.reduce((a, b) => a + b);
+	const number = Math.floor(Math.random() * totalSum + 1);
+
+	let sum = 0;
+	for (let i = 0; i < array.length; i++) {
+		sum += weight[i];
+
+		if (sum >= number) {
+			return array[i];
+		}
+	}
+
+	return array.at(-1) as T;
 };

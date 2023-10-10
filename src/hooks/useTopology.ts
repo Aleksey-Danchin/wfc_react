@@ -12,6 +12,7 @@ export const useTopology = ({
 	frameDatas: FrameData[];
 	initState?: number[];
 }) => {
+	// TODO: перенести в useFrames
 	const frameDatasCollection = useMemo(() => {
 		const frameDatasCollection: FrameDatasCollection = new Map();
 
@@ -36,15 +37,27 @@ export const useTopology = ({
 		[frameDatasCollection, topology]
 	);
 
-	const step = useCallback(() => {
+	// const step = useCallback(() => {
+	// 	const [nexTopology, nextPotential] = collapseStep(
+	// 		topology,
+	// 		frameDatasCollection,
+	// 		frameDatas,
+	// 		potential
+	// 	);
+
+	// 	setState([nexTopology, nextPotential]);
+	// }, [frameDatas, frameDatasCollection, potential, topology]);
+
+	const step = () => {
 		const [nexTopology, nextPotential] = collapseStep(
 			topology,
 			frameDatasCollection,
+			frameDatas,
 			potential
 		);
 
 		setState([nexTopology, nextPotential]);
-	}, [frameDatasCollection, potential, topology]);
+	};
 
-	return { topology, potential, getPosition, step };
+	return { topology, potential, frameDatasCollection, getPosition, step };
 };

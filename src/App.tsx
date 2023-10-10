@@ -1,10 +1,9 @@
-import { FC } from "react";
+import { FC, useEffect } from "react";
 import { Canvas } from "./components/Canvas";
-import { Preloader } from "./components/Preloader";
-import { WaveFunctionCollapse } from "./components/WaveFunctionCollapse";
 import { Chart } from "./components/Chart";
 import { useImages } from "./hooks/useImages";
 import { useFrames } from "./hooks/useFrames";
+import { useTopology } from "./hooks/useTopology";
 
 // const images = { schema: "./sets/schema.png" };
 const sets = ["./sets/schema.png"];
@@ -26,9 +25,25 @@ export const App: FC = () => {
 		frameDatas,
 		isCutting,
 		isCutted,
+		size,
 		isError: isCutError,
 		error: cutError,
-	} = useFrames({ image: images[0], size: 14, skip: !images[0] });
+	} = useFrames({
+		image: images[0],
+		size: 14,
+		skip: !images[0],
+		isPersist: true,
+	});
+
+	const { topology, potential, frameDatasCollection, getPosition, step } =
+		useTopology({
+			frameDatas,
+		});
+
+	useEffect(() => {
+		const flag = setTimeout(step, 0);
+		return () => clearTimeout(flag);
+	}, [step]);
 
 	if (!isLoaded && isLoading) {
 		return <p>Loading . . .</p>;
@@ -54,14 +69,17 @@ export const App: FC = () => {
 		);
 	}
 
-	return null;
-	// return (
-	// 	<Preloader images={images}>
-	// 		<WaveFunctionCollapse image="schema" size={14} rotate persist>
-	// 			<Canvas fullscreenMode>
-	// 				<Chart data={data} />
-	// 			</Canvas>
-	// 		</WaveFunctionCollapse>
-	// 	</Preloader>
-	// );
+	return (
+		<>
+			{/* <button onClick={() => step()}>Step by step</button> */}
+			<Canvas fullscreenMode>
+				<Chart
+					image={images[0]}
+					topology={topology}
+					frameDatasCollection={frameDatasCollection}
+					size={size}
+				/>
+			</Canvas>
+		</>
+	);
 };

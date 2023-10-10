@@ -1,36 +1,66 @@
-import { FC, useContext, useMemo } from "react";
-import { Frame } from "./Frame";
-import { CanvasContext } from "./CanvasContext";
-import { WaveFunctionCollapseContext } from "./WaveFunctionCollapseContext";
+import { FC, useMemo } from "react";
+import { Figura } from "./Figura";
 
 export interface ChartProps {
-	data: ChartData;
+	image: HTMLImageElement;
+	topology: Topology<number>;
+	frameDatasCollection: FrameDatasCollection;
+	size: number;
 }
 
-export const Chart: FC<ChartProps> = ({ data }) => {
-	const { width, height } = useContext(CanvasContext);
-	const { size } = useContext(WaveFunctionCollapseContext);
-
+export const Chart: FC<ChartProps> = ({
+	image,
+	topology,
+	frameDatasCollection,
+	size,
+}) => {
 	const frames = useMemo(() => {
 		const frames = [];
 
-		for (let i = 0; i < data.collapsed.length; i += 3) {
-			const x = data.collapsed[i];
-			const y = data.collapsed[i + 1];
-			const id = data.collapsed[i + 2];
+		for (const y of topology.keys()) {
+			const row = topology.get(y);
 
-			frames.push(
-				<Frame
-					key={i}
-					x={width / 2 + x * size}
-					y={height / 2 + y * size}
-					id={id}
-				/>
-			);
+			if (row === undefined) {
+				continue;
+			}
+
+			for (const x of row.keys()) {
+				const id = row.get(x);
+
+				if (id === undefined) {
+					continue;
+				}
+
+				const frameData = frameDatasCollection.get(id);
+
+				if (!frameData) {
+					continue;
+				}
+
+				frames.push(
+					<Figura
+						key={frames.length}
+						render={(canvas, context) => {
+							context.beginPath();
+							context.drawImage(
+								image,
+								frameData.x,
+								frameData.y,
+								size,
+								size,
+								canvas.width / 2 + x * size,
+								canvas.height / 2 + y * size,
+								size,
+								size
+							);
+						}}
+					/>
+				);
+			}
 		}
 
 		return frames;
-	}, [data.collapsed, height, size, width]);
+	}, [frameDatasCollection, image, size, topology]);
 
 	return <>{frames}</>;
 };
